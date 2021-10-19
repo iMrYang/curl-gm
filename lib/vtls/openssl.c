@@ -2657,6 +2657,14 @@ static CURLcode ossl_connect_step1(struct Curl_easy *data,
   case CURL_SSLVERSION_SSLv3:
     failf(data, "No SSLv3 support");
     return CURLE_NOT_BUILT_IN;
+  case CURL_SSLVERSION_GMTLS:
+#if OPENSSL_VERSION_NUMBER >= 0x1010100fL
+    req_method = GMTLS_method();
+#else
+    req_method = TLSv1_1_method();
+#endif
+    use_sni(TRUE);
+    break;
   default:
     failf(data, "Unrecognized parameter passed via CURLOPT_SSLVERSION");
     return CURLE_SSL_CONNECT_ERROR;
@@ -2669,6 +2677,15 @@ static CURLcode ossl_connect_step1(struct Curl_easy *data,
     failf(data, "SSL: couldn't create a context: %s",
           ossl_strerror(ERR_peek_error(), error_buffer, sizeof(error_buffer)));
     return CURLE_OUT_OF_MEMORY;
+  }
+
+  if (CURL_SSLVERSION_GMTLS == ssl_version) {
+#if OPENSSL_VERSION_NUMBER >= 0x1010100fL
+    /* nothing to do */
+#else
+    /* ipp9658 need set handshake type */
+    SSL_CTX_set_handshake_type_ext(backend->ctx, SM2_HANDSHAKE_TYPE);
+#endif
   }
 
 #ifdef SSL_MODE_RELEASE_BUFFERS
@@ -2768,6 +2785,8 @@ static CURLcode ossl_connect_step1(struct Curl_easy *data,
       if(result != CURLE_OK)
         return result;
       break;
+    case CURL_SSLVERSION_GMTLS:
+      break;
 
     default:
       failf(data, "Unrecognized parameter passed via CURLOPT_SSLVERSION");
@@ -2828,6 +2847,13 @@ static CURLcode ossl_connect_step1(struct Curl_easy *data,
   }
 
   ciphers = SSL_CONN_CONFIG(cipher_list);
+  if(!ciphers && CURL_SSLVERSION_GMTLS == ssl_version) {
+    if(ssl_cert || ssl_cert_blob || ssl_cert_type) {
+      ciphers = (char *)"ECC-SM4-SM3:ECDHE-SM4-SM3";
+    } else {
+      ciphers = (char *)"ECC-SM4-SM3";
+    }
+  }
   if(!ciphers)
     ciphers = (char *)DEFAULT_CIPHER_SELECTION;
   if(ciphers) {
