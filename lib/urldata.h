@@ -248,12 +248,14 @@ struct ssl_primary_config {
   char *CAfile;          /* certificate to verify peer against */
   char *issuercert;      /* optional issuer certificate filename */
   char *clientcert;
+  char *clientecert;     /* GMTLS encrypt usage client certificate */
   char *random_file;     /* path to file containing "random" data */
   char *egdsocket;       /* path to file containing the EGD daemon socket */
   char *cipher_list;     /* list of ciphers to use */
   char *cipher_list13;   /* list of TLS 1.3 cipher suites to use */
   char *pinned_key;
   struct curl_blob *cert_blob;
+  struct curl_blob *ecert_blob;
   struct curl_blob *ca_info_blob;
   struct curl_blob *issuercert_blob;
   char *curves;          /* list of curves to use */
@@ -271,7 +273,9 @@ struct ssl_config_data {
   void *fsslctxp;        /* parameter for call back */
   char *cert_type; /* format for certificate (default: PEM)*/
   char *key; /* private key file name */
+  char *ekey; /* GMTLS encrypt usage private key file name */
   struct curl_blob *key_blob;
+  struct curl_blob *ekey_blob;
   char *key_type; /* format for private key (default: PEM) */
   char *key_passwd; /* plain text private key password */
 #ifdef USE_TLS_SRP
@@ -1497,6 +1501,7 @@ struct Curl_multi;    /* declared and used only in multi.c */
  */
 enum dupstring {
   STRING_CERT,            /* client certificate file name */
+  STRING_ECERT,           /* GMTLS encrypt usage client certificate file name */
   STRING_CERT_PROXY,      /* client certificate file name */
   STRING_CERT_TYPE,       /* format for certificate (default: PEM)*/
   STRING_CERT_TYPE_PROXY, /* format for certificate (default: PEM)*/
@@ -1510,6 +1515,7 @@ enum dupstring {
   STRING_FTP_ALTERNATIVE_TO_USER, /* command to send if USER/PASS fails */
   STRING_FTPPORT,         /* port to send with the FTP PORT command */
   STRING_KEY,             /* private key file name */
+  STRING_EKEY,            /* GMTLS encrypt usage private key file name */
   STRING_KEY_PROXY,       /* private key file name */
   STRING_KEY_PASSWD,      /* plain text private key password */
   STRING_KEY_PASSWD_PROXY, /* plain text private key password */

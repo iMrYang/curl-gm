@@ -139,6 +139,7 @@ struct OperationConfig {
   char *cipher13_list;
   char *proxy_cipher13_list;
   char *cert;
+  char *ecert;              /* GMTLS encrypt usage certificate */
   char *proxy_cert;
   char *cert_type;
   char *proxy_cert_type;
@@ -151,6 +152,7 @@ struct OperationConfig {
   char *pinnedpubkey;
   char *proxy_pinnedpubkey;
   char *key;
+  char *ekey;               /* GMTLS encrypt usage private key */
   char *proxy_key;
   char *key_type;
   char *proxy_key_type;

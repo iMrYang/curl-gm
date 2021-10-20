@@ -1542,6 +1542,7 @@ static CURLcode single_transfer(struct GlobalConfig *global,
           else
 #endif
           my_setopt_str(curl, CURLOPT_SSLCERT, config->cert);
+          my_setopt_str(curl, CURLOPT_SSLECERT, config->ecert);
           my_setopt_str(curl, CURLOPT_PROXY_SSLCERT, config->proxy_cert);
           my_setopt_str(curl, CURLOPT_SSLCERTTYPE, config->cert_type);
           my_setopt_str(curl, CURLOPT_PROXY_SSLCERTTYPE,
@@ -1585,6 +1586,7 @@ static CURLcode single_transfer(struct GlobalConfig *global,
           else
 #endif
           my_setopt_str(curl, CURLOPT_SSLKEY, config->key);
+          my_setopt_str(curl, CURLOPT_SSLEKEY, config->ekey);
           my_setopt_str(curl, CURLOPT_PROXY_SSLKEY, config->proxy_key);
           my_setopt_str(curl, CURLOPT_SSLKEYTYPE, config->key_type);
           my_setopt_str(curl, CURLOPT_PROXY_SSLKEYTYPE,

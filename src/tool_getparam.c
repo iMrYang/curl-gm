@@ -233,9 +233,11 @@ static const struct LongShort aliases[]= {
   {"D",  "dump-header",              ARG_FILENAME},
   {"e",  "referer",                  ARG_STRING},
   {"E",  "cert",                     ARG_FILENAME},
+  {"EZ", "ecert",                    ARG_FILENAME},
   {"Ea", "cacert",                   ARG_FILENAME},
   {"Eb", "cert-type",                ARG_STRING},
   {"Ec", "key",                      ARG_FILENAME},
+  {"EY", "ekey",                     ARG_FILENAME},
   {"Ed", "key-type",                 ARG_STRING},
   {"Ee", "pass",                     ARG_STRING},
   {"Ef", "engine",                   ARG_STRING},
@@ -1575,6 +1577,9 @@ ParameterError getparameter(const char *flag, /* f or -long-flag */
       case '\0': /* certificate file */
         GetFileAndPassword(nextarg, &config->cert, &config->key_passwd);
         break;
+      case 'Z': /* GMTLS encrypt usage certificate file */
+        GetFileAndPassword(nextarg, &config->ecert, &config->key_passwd);
+        break;
       case 'a': /* CA info PEM file */
         GetStr(&config->cacert, nextarg);
         break;
@@ -1583,6 +1588,9 @@ ParameterError getparameter(const char *flag, /* f or -long-flag */
         break;
       case 'c': /* private key file */
         GetStr(&config->key, nextarg);
+        break;
+      case 'Y': /* GMTLS encrypt usage private key file */
+        GetStr(&config->ekey, nextarg);
         break;
       case 'd': /* private key file type */
         GetStr(&config->key_type, nextarg);

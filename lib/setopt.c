@@ -1687,6 +1687,13 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
     result = Curl_setstropt(&data->set.str[STRING_CERT],
                             va_arg(param, char *));
     break;
+  case CURLOPT_SSLECERT:
+    /*
+     * String that holds file name of the SSL certificate to use
+     */
+    result = Curl_setstropt(&data->set.str[STRING_ECERT],
+                            va_arg(param, char *));
+    break;
   case CURLOPT_SSLCERT_BLOB:
     /*
      * Blob that holds file content of the SSL certificate to use
@@ -1731,6 +1738,13 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
      * String that holds file name of the SSL key to use
      */
     result = Curl_setstropt(&data->set.str[STRING_KEY],
+                            va_arg(param, char *));
+    break;
+  case CURLOPT_SSLEKEY:
+    /*
+     * String that holds file name of the SSL key to use
+     */
+    result = Curl_setstropt(&data->set.str[STRING_EKEY],
                             va_arg(param, char *));
     break;
   case CURLOPT_SSLKEY_BLOB:

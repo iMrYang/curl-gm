@@ -1125,6 +1125,348 @@ int cert_stuff(struct Curl_easy *data,
   return 1;
 }
 
+static int
+SSL_CTX_use_certificate_blob_gm(SSL_CTX *ctx, const struct curl_blob *blob,
+                                const struct curl_blob *eblob,
+                                int type, const char *key_passwd)
+{
+  int ret = 0;
+  X509 *x = NULL;
+  X509 *ex = NULL;
+  /* the typecast of blob->len is fine since it is guaranteed to never be
+     larger than CURL_MAX_INPUT_LENGTH */
+  BIO *in = BIO_new_mem_buf(blob->data, (int)(blob->len));
+  BIO *ein = BIO_new_mem_buf(eblob->data, (int)(eblob->len));
+  if(!in || !ein) {
+    ret = CURLE_OUT_OF_MEMORY;
+    goto end;
+  }
+
+  if(type == SSL_FILETYPE_ASN1) {
+    /* j = ERR_R_ASN1_LIB; */
+    x = d2i_X509_bio(in, NULL);
+    ex = d2i_X509_bio(ein, NULL);
+  }
+  else if(type == SSL_FILETYPE_PEM) {
+    /* ERR_R_PEM_LIB; */
+    x = PEM_read_bio_X509(in, NULL,
+                          passwd_callback, (void *)key_passwd);
+    ex = PEM_read_bio_X509(ein, NULL,
+                          passwd_callback, (void *)key_passwd);
+  }
+  else {
+    ret = 0;
+    goto end;
+  }
+
+  if(!x) {
+    ret = 0;
+    goto end;
+  }
+
+  ret = SSL_CTX_use_certificate_ext(ctx, ex, x);
+ end:
+  X509_free(ex);
+  X509_free(x);
+  BIO_free(ein);
+  BIO_free(in);
+  return ret;
+}
+
+static int
+SSL_CTX_use_PrivateKey_blob_gm(SSL_CTX *ctx, const struct curl_blob *blob,
+                               const struct curl_blob *eblob,
+                               int type, const char *key_passwd)
+{
+  int ret = 0;
+  EVP_PKEY *pkey = NULL;
+  EVP_PKEY *epkey = NULL;
+  BIO *in = BIO_new_mem_buf(blob->data, (int)(blob->len));
+  BIO *ein = BIO_new_mem_buf(eblob->data, (int)(eblob->len));
+  if(!in || !ein) {
+    ret = CURLE_OUT_OF_MEMORY;
+    goto end;
+  }
+
+  if(type == SSL_FILETYPE_PEM) {
+    pkey = PEM_read_bio_PrivateKey(in, NULL, passwd_callback,
+                                   (void *)key_passwd);
+    epkey = PEM_read_bio_PrivateKey(ein, NULL, passwd_callback,
+                                   (void *)key_passwd);
+  }
+  else if(type == SSL_FILETYPE_ASN1) {
+    pkey = d2i_PrivateKey_bio(in, NULL);
+    epkey = d2i_PrivateKey_bio(ein, NULL);
+  }
+  else {
+    ret = 0;
+    goto end;
+  }
+  if(!pkey || !epkey) {
+    ret = 0;
+    goto end;
+  }
+  ret = SSL_CTX_use_PrivateKey_ext(ctx, epkey, pkey);
+end:
+  EVP_PKEY_free(epkey);
+  EVP_PKEY_free(pkey);
+  BIO_free(ein);
+  BIO_free(in);
+  return ret;
+}
+
+static int
+SSL_CTX_use_certificate_chain_blob_gm(SSL_CTX *ctx,
+                                      const struct curl_blob *blob,
+                                      const struct curl_blob *eblob,
+                                      const char *key_passwd)
+{
+/* SSL_CTX_add1_chain_cert introduced in OpenSSL 1.0.2 */
+#if (OPENSSL_VERSION_NUMBER >= 0x1000200fL) && /* OpenSSL 1.0.2 or later */ \
+    !(defined(LIBRESSL_VERSION_NUMBER) && \
+      (LIBRESSL_VERSION_NUMBER < 0x2090100fL)) /* LibreSSL 2.9.1 or later */
+  int ret = 0;
+  X509 *x = NULL;
+  X509 *ex = NULL;
+  void *passwd_callback_userdata = (void *)key_passwd;
+  BIO *in = BIO_new_mem_buf(blob->data, (int)(blob->len));
+  BIO *out = BIO_new_mem_buf(eblob->data, (int)(eblob->len));
+  if(!in || !out) {
+    ret = CURLE_OUT_OF_MEMORY;
+    goto end;
+  }
+
+  ERR_clear_error();
+
+  x = PEM_read_bio_X509_AUX(in, NULL,
+                            passwd_callback, (void *)key_passwd);
+  ex = PEM_read_bio_X509_AUX(ein, NULL,
+                            passwd_callback, (void *)key_passwd);
+
+  if(!x || !ex) {
+    ret = 0;
+    goto end;
+  }
+
+  ret = SSL_CTX_use_certificate_ext(ctx, ex, x);
+
+  if(ERR_peek_error() != 0)
+    ret = 0;
+
+  if(ret) {
+    X509 *ca;
+    unsigned long err;
+
+    if(!SSL_CTX_clear_chain_certs(ctx)) {
+      ret = 0;
+      goto end;
+    }
+
+    while((ca = PEM_read_bio_X509(in, NULL, passwd_callback,
+                                  passwd_callback_userdata))
+          != NULL) {
+
+      if(!SSL_CTX_add0_chain_cert(ctx, ca)) {
+        X509_free(ca);
+        ret = 0;
+        goto end;
+      }
+    }
+
+    while((ca = PEM_read_bio_X509(ein, NULL, passwd_callback,
+                                  passwd_callback_userdata))
+          != NULL) {
+
+      if(!SSL_CTX_add0_chain_cert(ctx, ca)) {
+        X509_free(ca);
+        ret = 0;
+        goto end;
+      }
+    }
+
+    err = ERR_peek_last_error();
+    if((ERR_GET_LIB(err) == ERR_LIB_PEM) &&
+       (ERR_GET_REASON(err) == PEM_R_NO_START_LINE))
+      ERR_clear_error();
+    else
+      ret = 0;
+  }
+
+ end:
+  X509_free(x);
+  X509_free(ex);
+  BIO_free(in);
+  BIO_free(ein);
+  return ret;
+#else
+  (void)ctx; /* unused */
+  (void)blob; /* unused */
+  (void)eblob; /* unused */
+  (void)key_passwd; /* unused */
+  return 0;
+#endif
+}
+
+static
+int cert_stuff_gm(struct Curl_easy *data,
+               SSL_CTX* ctx,
+               char *cert_file,
+               const struct curl_blob *cert_blob,
+               const char *cert_type,
+               char *key_file,
+               const struct curl_blob *key_blob,
+               const char *key_type,
+               char *key_passwd,
+               char *ecert_file,
+               const struct curl_blob *ecert_blob,
+               char *ekey_file,
+               const struct curl_blob *ekey_blob)
+{
+  char error_buffer[256];
+  bool check_privkey = TRUE;
+
+  int file_type = do_file_type(cert_type);
+
+  if(cert_file || cert_blob || (file_type == SSL_FILETYPE_ENGINE)) {
+    SSL *ssl;
+    X509 *x509;
+    int cert_done = 0;
+    int cert_use_result;
+
+    if(key_passwd) {
+      /* set the password in the callback userdata */
+      SSL_CTX_set_default_passwd_cb_userdata(ctx, key_passwd);
+      /* Set passwd callback: */
+      SSL_CTX_set_default_passwd_cb(ctx, passwd_callback);
+    }
+
+
+    switch(file_type) {
+    case SSL_FILETYPE_PEM:
+      /* SSL_CTX_use_certificate_chain_file() only works on PEM files */
+      cert_use_result = (cert_blob && ecert_blob) ?
+        SSL_CTX_use_certificate_chain_blob_gm(ctx, cert_blob, ecert_blob,
+                                              key_passwd) :
+        (SSL_CTX_use_certificate_chain_file(ctx, cert_file) &&
+        SSL_CTX_use_certificate_chain_file(ctx, ecert_file) &&
+        SSL_CTX_use_certificate_file_ext(ctx, ecert_file, cert_file,
+                                        file_type));
+      if(cert_use_result != 1) {
+        failf(data,
+              "could not load PEM client certificate, " OSSL_PACKAGE
+              " error %s, "
+              "(no key found, wrong pass phrase, or wrong file format?)",
+              ossl_strerror(ERR_get_error(), error_buffer,
+                            sizeof(error_buffer)) );
+        return 0;
+      }
+      break;
+
+    case SSL_FILETYPE_ASN1:
+      /* SSL_CTX_use_certificate_file() works with either PEM or ASN1, but
+         we use the case above for PEM so this can only be performed with
+         ASN1 files. */
+
+      cert_use_result = (cert_blob && ecert_blob) ?
+        SSL_CTX_use_certificate_blob_gm(ctx, cert_blob, ecert_blob,
+                                       file_type, key_passwd) :
+        SSL_CTX_use_certificate_file_ext(ctx, ecert_file, cert_file, file_type);
+      if(cert_use_result != 1) {
+        failf(data,
+              "could not load ASN1 client certificate, " OSSL_PACKAGE
+              " error %s, "
+              "(no key found, wrong pass phrase, or wrong file format?)",
+              ossl_strerror(ERR_get_error(), error_buffer,
+                            sizeof(error_buffer)) );
+        return 0;
+      }
+      break;
+    case SSL_FILETYPE_ENGINE:
+    {
+      failf(data, "GMTLS file type ENG for certificate not implemented");
+      return 0;
+    }
+    case SSL_FILETYPE_PKCS12:
+    {
+      failf(data, "GMTLS file type P12 for certificate not implemented");
+      return 0;
+    }
+    default:
+      failf(data, "not supported file type '%s' for certificate", cert_type);
+      return 0;
+    }
+
+    if((!key_file) && (!key_blob)) {
+      key_file = cert_file;
+      key_blob = cert_blob;
+    }
+    else
+      file_type = do_file_type(key_type);
+
+    switch(file_type) {
+    case SSL_FILETYPE_PEM:
+      if(cert_done)
+        break;
+      /* FALLTHROUGH */
+    case SSL_FILETYPE_ASN1:
+      cert_use_result = (key_blob && ekey_blob) ?
+        SSL_CTX_use_PrivateKey_blob_gm(ctx, key_blob, ekey_blob, file_type,
+                                       key_passwd) :
+        SSL_CTX_use_PrivateKey_file_ext(ctx, ekey_file, key_file, file_type);
+      if(cert_use_result != 1) {
+        failf(data, "unable to set private key file: '%s' type %s",
+              key_file?key_file:"(memory blob)", key_type?key_type:"PEM");
+        return 0;
+      }
+      break;
+    case SSL_FILETYPE_ENGINE:
+    {
+      failf(data, "GMTLS file type ENG for private key not supported");
+      return 0;
+    }
+    case SSL_FILETYPE_PKCS12:
+    {
+        failf(data, "file type P12 for private key not supported");
+        return 0;
+    }
+    default:
+      failf(data, "not supported file type for private key");
+      return 0;
+    }
+
+    ssl = SSL_new(ctx);
+    if(!ssl) {
+      failf(data, "unable to create an SSL structure");
+      return 0;
+    }
+
+    x509 = SSL_get_certificate(ssl);
+
+    /* This version was provided by Evan Jordan and is supposed to not
+       leak memory as the previous version: */
+    if(x509) {
+      EVP_PKEY *pktmp = X509_get_pubkey(x509);
+      EVP_PKEY_copy_parameters(pktmp, SSL_get_privatekey(ssl));
+      EVP_PKEY_free(pktmp);
+    }
+
+    SSL_free(ssl);
+
+    /* If we are using DSA, we can copy the parameters from
+     * the private key */
+
+    if(check_privkey == TRUE) {
+      /* Now we know that a key and cert have been set against
+       * the SSL context */
+      if(!SSL_CTX_check_private_key_ext(ctx)) {
+        failf(data, "Private key does not match the certificate public key");
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+
 /* returns non-zero on failure */
 static int x509_name_oneline(X509_NAME *a, char *buf, size_t size)
 {
@@ -2612,7 +2954,9 @@ static CURLcode ossl_connect_step1(struct Curl_easy *data,
   const enum CURL_TLSAUTH ssl_authtype = SSL_SET_OPTION(authtype);
 #endif
   char * const ssl_cert = SSL_SET_OPTION(primary.clientcert);
+  char * const ssl_ecert = SSL_SET_OPTION(primary.clientecert);
   const struct curl_blob *ssl_cert_blob = SSL_SET_OPTION(primary.cert_blob);
+  const struct curl_blob *ssl_ecert_blob = SSL_SET_OPTION(primary.ecert_blob);
   const struct curl_blob *ca_info_blob = SSL_CONN_CONFIG(ca_info_blob);
   const char * const ssl_cert_type = SSL_SET_OPTION(cert_type);
   const char * const ssl_cafile =
@@ -2834,6 +3178,19 @@ static CURLcode ossl_connect_step1(struct Curl_easy *data,
   }
 #endif
 
+  if (ssl_ecert || ssl_ecert_blob) {
+    if(!result &&
+       !cert_stuff_gm(data, backend->ctx,
+                   ssl_cert, ssl_cert_blob, ssl_cert_type,
+                   SSL_SET_OPTION(key), SSL_SET_OPTION(key_blob),
+                   SSL_SET_OPTION(key_type), SSL_SET_OPTION(key_passwd),
+                   ssl_ecert, ssl_ecert_blob,
+                   SSL_SET_OPTION(ekey), SSL_SET_OPTION(ekey_blob)))
+      result = CURLE_SSL_CERTPROBLEM;
+    if(result)
+      /* failf() is already done in cert_stuff() */
+      return result;
+  } else
   if(ssl_cert || ssl_cert_blob || ssl_cert_type) {
     if(!result &&
        !cert_stuff(data, backend->ctx,

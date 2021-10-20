@@ -111,6 +111,7 @@ static void free_config_fields(struct OperationConfig *config)
   Curl_safefree(config->cipher_list);
   Curl_safefree(config->proxy_cipher_list);
   Curl_safefree(config->cert);
+  Curl_safefree(config->ecert);
   Curl_safefree(config->proxy_cert);
   Curl_safefree(config->cert_type);
   Curl_safefree(config->proxy_cert_type);
@@ -124,6 +125,7 @@ static void free_config_fields(struct OperationConfig *config)
   Curl_safefree(config->proxy_pinnedpubkey);
   Curl_safefree(config->proxy_crlfile);
   Curl_safefree(config->key);
+  Curl_safefree(config->ekey);
   Curl_safefree(config->proxy_key);
   Curl_safefree(config->key_type);
   Curl_safefree(config->proxy_key_type);

@@ -1157,6 +1157,9 @@ typedef enum {
   /* name of the file keeping your private SSL-certificate */
   CURLOPT(CURLOPT_SSLCERT, CURLOPTTYPE_STRINGPOINT, 25),
 
+  /* name of the file keeping your GM encrypt usage private SSL-certificate */
+  CURLOPT(CURLOPT_SSLECERT, CURLOPTTYPE_STRINGPOINT, 425),
+
   /* password for the SSL or SSH private key */
   CURLOPT(CURLOPT_KEYPASSWD, CURLOPTTYPE_STRINGPOINT, 26),
 
@@ -1362,6 +1365,9 @@ typedef enum {
 
   /* name of the file keeping your private SSL-key */
   CURLOPT(CURLOPT_SSLKEY, CURLOPTTYPE_STRINGPOINT, 87),
+
+  /* name of the file keeping your GM encrypt usage private SSL-key */
+  CURLOPT(CURLOPT_SSLEKEY, CURLOPTTYPE_STRINGPOINT, 487),
 
   /* type of the file keeping your private SSL-key ("DER", "PEM", "ENG") */
   CURLOPT(CURLOPT_SSLKEYTYPE, CURLOPTTYPE_STRINGPOINT, 88),
